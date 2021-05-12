@@ -2,13 +2,16 @@
 //We read the value from the analog input, calibrate it then inject to the module
 //Refer to Surtrtech youtube channel for more information
 
+#include <util/atomic.h> // this library includes the ATOMIC_BLOCK macro.
+
 
 int mot1Pin = 8; //Declaring where our module is wired
 int mot2Pin = 9;
 int spindleCtlPin = 3;// Don't forget this is a PWM DI/DO
 int dirPin = 4;
+int counterPin = 2; // Should be an interrupt pin 
 
-byte spindleDir = 1;
+byte spindleDir = 1; 
 int state = HIGH;
 int reading;           // the current reading from the input pin
 int previous = LOW;    // the previous reading from the input pin
@@ -21,6 +24,7 @@ long debounce = 200;   // the debounce time, increase if the output flickers
 int potValue;
 int speed1;
 int speed2;
+volatile int counter = 0;
 
 
 void setup() {
@@ -40,8 +44,50 @@ TCCR2B = TCCR2B & B11111000 | B00000001;    // set timer 2 divisor to     1 for 
   pinMode(mot2Pin, OUTPUT);  
   pinMode(spindleCtlPin, OUTPUT);
   pinMode(dirPin, INPUT);
-
+  pinMode(counterPin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(counterPin), updateCounter, RISING);
+  
   Serial.begin(9600);
+}
+
+
+void loop() {
+
+  reading = digitalRead(dirPin);
+ 
+
+  // if the input just went from LOW and HIGH and we've waited long enough
+  // to ignore any noise on the circuit, toggle the output pin and remember
+  // the time
+  if (reading == HIGH && previous == LOW && millis() - time > debounce) {
+    spindleDir = !spindleDir;
+    counter = 0;  //TODO: CHANGE THIS AFTER THE TEST TO A SEPARATE BUTTON 
+    time = millis();    
+  }
+
+
+  previous = reading;
+
+  potValue = analogRead(A0);
+  speed1 = potValue * 0.2492668622; //We read thea analog value from the potentiometer and calibrate it. (1023 -> 255)
+ 
+  speed2 = map(potValue, 1, 1023, 145, 255);
+
+  //Serial.print(speed1);
+  //Serial.print(", ");
+  //Serial.println(speed2);
+ 
+
+
+  switch (potValue){
+    case 0:
+      turnSpindle(spindleDir, 0); 
+      break;  
+    default:
+      turnSpindle(spindleDir, speed2);
+      break;
+  }
+
 }
 
 int turnSpindle(byte dir, char motSpeed){ //We create a function which control the direction and speed
@@ -62,38 +108,9 @@ int turnSpindle(byte dir, char motSpeed){ //We create a function which control t
   
   analogWrite(spindleCtlPin, motSpeed);// Then inject it to our motor
 }
-void loop() {
-
-  reading = digitalRead(dirPin);
-
-  // if the input just went from LOW and HIGH and we've waited long enough
-  // to ignore any noise on the circuit, toggle the output pin and remember
-  // the time
-  if (reading == HIGH && previous == LOW && millis() - time > debounce) {
-    spindleDir = !spindleDir;
-    time = millis();    
-  }
 
 
-  previous = reading;
-
-  potValue = analogRead(A0);
-  speed1 = potValue * 0.2492668622; //We read thea analog value from the potentiometer and calibrate it. (1023 -> 255)
- 
-  speed2 = map(potValue, 1, 1023, 145, 255);
-
-  Serial.print(speed1);
-  Serial.print(", ");
-  Serial.println(speed2);
-
-
-  switch (potValue){
-    case 0:
-      turnSpindle(spindleDir, 0); //one function that keeps looping you can add another one with different direction or stop
-      break;  
-    default:
-      turnSpindle(spindleDir, speed2);
-      break;
-  }
-
+void updateCounter() {  //ISr for updating the counter when the interrupt is triggered
+  counter++;
+  Serial.println(counter);
 }
