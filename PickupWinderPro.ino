@@ -46,6 +46,7 @@ TCCR2B = TCCR2B & B11111000 | B00000001;    // set timer 2 divisor to     1 for 
   pinMode(dirPin, INPUT);
   pinMode(counterPin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(counterPin), updateCounter, RISING);
+
   
   Serial.begin(9600);
 }
@@ -90,7 +91,7 @@ void loop() {
 
 }
 
-int turnSpindle(byte dir, char motSpeed){ //We create a function which control the direction and speed
+void turnSpindle(byte dir, char motSpeed){ //We create a function which control the direction and speed
   switch (dir) {
   case 0:
     digitalWrite(mot1Pin, LOW); //Switch between this HIGH and LOW to change direction
