@@ -6,8 +6,7 @@
 #include <Wire.h>
 #include <hd44780.h> // include hd44780 library header file
 #include <hd44780ioClass/hd44780_I2Cexp.h> // i/o expander/backpack class
-
-hd44780_I2Cexp lcd; // auto detect backpack and pin mappings
+#include <Stepper.h>
 
 // --- Declare pins ---
 int mot1Pin = 8; //Declaring where our module is wired
@@ -18,21 +17,26 @@ int resetPin = 5;
 int counterPin = 2; // Should be an interrupt pin 
 
 // --- Declare variables ---
-byte spindleDir = 1; 
-int dirBtnValue = HIGH;           // the current reading from the input pin
-int previousDirBtnVal = LOW;    // the previous reading from the input pin
-int resetBtnValue = HIGH;           // the current reading from the reset pin
-int previousResBtnVal = LOW;    // the previous reading from the counter reset pin
+byte dirBtnValue = HIGH;           // the current reading from the input pin
+byte previousDirBtnVal = LOW;    // the previous reading from the input pin
+byte resetBtnValue = HIGH;           // the current reading from the reset pin
+byte previousResBtnVal = LOW;    // the previous reading from the counter reset pin
+byte spindleDir = 0; 
+byte xDir = 1; 
+int xMultiplier = 1;
+
+int pickupWidth = 512;
 
 // the follow variables are long's because the time, measured in miliseconds,
 // will quickly become a bigger number than can be stored in an int.
 long time = 0;         // the last time the output pin was toggled
 long debounce = 200;   // the debounce time, increase if the output flickers
 
-
-
 volatile int counter = 0;
 volatile int interruptFlag = 0;
+
+hd44780_I2Cexp lcd; // auto detect backpack and pin mappings
+Stepper xAxis(512, 10, 11, 12, 13); //steps per revolution -> need to recheck this - and the motor connections
 
 
 void setup() {
@@ -87,6 +91,10 @@ void setup() {
   lcd.print("Count: Dir:");
   updateLCD_counter();
   updateLCD_direction(spindleDir);
+
+  //--
+  xAxis.setSpeed(60);
+  
   
 }
 
@@ -115,7 +123,7 @@ void loop() {
 
   controlMotor(analogRead(A0), spindleDir);
   
-
+  //Serial.println(analogRead(A0));
   //Serial.println(potValue);
   //Serial.print(", ");
   //Serial.println(speed2);
@@ -123,8 +131,13 @@ void loop() {
 
  
   // update LCD with counter value from ISR
+  // move X Axis
   if(interruptFlag == 1){
     updateLCD_counter();
+
+    //((counter/pickupWidth)%2 == 0) ? stepDir = 1 : stepDir = -1 ; // maybe refactor this? 
+    moveXAxis(getXSteps(((counter/pickupWidth)%2 == 0), xMultiplier));
+    
     interruptFlag = 0;
   }
 }
@@ -134,7 +147,7 @@ void controlMotor(int potValue, byte spindleDir){
   int prevPotVal = 0;
   if(potValue != prevPotVal){
     switch (potValue){
-    case 0 ... 3:
+    case 0 ... 7:
       turnSpindle(spindleDir, 0); 
       break;  
     default:
@@ -184,6 +197,17 @@ void updateLCD_direction(byte spDir){
 void updateLCD_counter(){
   lcd.setCursor(0,1);
   lcd.print(counter);
+}
+
+void moveXAxis(int stepsToMove){
+
+  xAxis.step(stepsToMove);
+}
+
+int getXSteps(byte xDir, int xMultiplier){
+  int stepsToMove = ((xDir == 0) ? xMultiplier * -1 : xMultiplier); 
+  
+  return stepsToMove;
 }
 
 void rotationISR() {  //ISR fro full rotation triggered by sensor
