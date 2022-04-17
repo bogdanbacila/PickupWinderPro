@@ -13,19 +13,26 @@ int mot1Pin = 8; //Declaring where our module is wired
 int mot2Pin = 9;
 int spindleCtlPin = 3;  // Don't forget this is a PWM DI/DO
 int dirPin = 4;
-int resetPin = 5;
+int resetPin = 7;
 int counterPin = 2; // Should be an interrupt pin 
+int leftPin = 6;
+int rightPin = 5;
+int prevPotVal = 0;
 
 // --- Declare variables ---
 byte dirBtnValue = HIGH;           // the current reading from the input pin
 byte previousDirBtnVal = LOW;    // the previous reading from the input pin
 byte resetBtnValue = HIGH;           // the current reading from the reset pin
 byte previousResBtnVal = LOW;    // the previous reading from the counter reset pin
+byte leftBtnValue = HIGH;           // the current reading from the input pin
+byte previousLeftBtnVal = LOW;    // the previous reading from the input pin
+byte rightBtnValue = HIGH;           // the current reading from the reset pin
+byte previousRightBtnVal = LOW;    // the previous reading from the counter reset pin
 byte spindleDir = 0; 
 byte xDir = 1; 
-int xMultiplier = 1;
+int xMultiplier = 5 ;
 
-int pickupWidth = 512;
+int pickupWidth = 150;
 
 // the follow variables are long's because the time, measured in miliseconds,
 // will quickly become a bigger number than can be stored in an int.
@@ -121,13 +128,21 @@ void loop() {
   }
   previousResBtnVal = resetBtnValue;
 
+  leftBtnValue = digitalRead(leftPin);
+  if(leftBtnValue == HIGH  ){
+    moveXAxis(-1);
+  }
+ 
+
+   rightBtnValue = digitalRead(rightPin);
+  if(rightBtnValue == HIGH  ){
+    moveXAxis(1);
+  }
+ 
   controlMotor(analogRead(A0), spindleDir);
   
-  //Serial.println(analogRead(A0));
-  //Serial.println(potValue);
-  //Serial.print(", ");
-  //Serial.println(speed2);
- 
+//  Serial.println(analogRead(A0));
+
 
  
   // update LCD with counter value from ISR
@@ -135,7 +150,7 @@ void loop() {
   if(interruptFlag == 1){
     updateLCD_counter();
 
-    //((counter/pickupWidth)%2 == 0) ? stepDir = 1 : stepDir = -1 ; // maybe refactor this? 
+    //((counter/pickupWidth)%2 == 0) ? stepDir = 1 : stepDir = -1 ; // maybe refactor this? - YES! - DO IT!
     moveXAxis(getXSteps(((counter/pickupWidth)%2 == 0), xMultiplier));
     
     interruptFlag = 0;
@@ -143,11 +158,16 @@ void loop() {
 }
 
 void controlMotor(int potValue, byte spindleDir){
-  int motSpeed = map(potValue, 1, 1023, 145, 255);
-  int prevPotVal = 0;
+  int motSpeed = map(potValue, 0, 1023, 255, 137);
+  
+//  Serial.print(potValue);
+//  Serial.print(", ");
+//  Serial.println(motSpeed);
+ 
+  
   if(potValue != prevPotVal){
     switch (potValue){
-    case 0 ... 7:
+    case 1020 ... 1023:
       turnSpindle(spindleDir, 0); 
       break;  
     default:
