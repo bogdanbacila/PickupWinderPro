@@ -9,30 +9,35 @@
 #include <Stepper.h>
 
 // --- Declare pins ---
-int mot1Pin = 8; //Declaring where our module is wired
-int mot2Pin = 9;
-int spindleCtlPin = 3;  // Don't forget this is a PWM DI/DO
-int dirPin = 4;
-int resetPin = 7;
-int counterPin = 2; // Should be an interrupt pin 
-int leftPin = 6;
-int rightPin = 5;
-int prevPotVal = 0;
+byte mot1Pin = 8; //Declaring where our module is wired
+byte mot2Pin = 9;
+byte spindleCtlPin = 3;  // Don't forget this is a PWM DI/DO
+byte dirPin = 4;
+byte resetPin = 7;
+byte counterPin = 2; // Should be an interrupt pin 
+byte leftPin = 6;
+byte rightPin = 5;
+byte homePin = A1;
+
 
 // --- Declare variables ---
 byte dirBtnValue = HIGH;           // the current reading from the input pin
 byte previousDirBtnVal = LOW;    // the previous reading from the input pin
 byte resetBtnValue = HIGH;           // the current reading from the reset pin
 byte previousResBtnVal = LOW;    // the previous reading from the counter reset pin
+byte homeBtnValue = HIGH;           // the current reading from the reset pin
+byte previousHomeBtnVal = LOW;    // the previous reading from the counter reset pin
+
 byte leftBtnValue = HIGH;           // the current reading from the input pin
-byte previousLeftBtnVal = LOW;    // the previous reading from the input pin
 byte rightBtnValue = HIGH;           // the current reading from the reset pin
-byte previousRightBtnVal = LOW;    // the previous reading from the counter reset pin
-byte spindleDir = 0; 
-byte xDir = 1; 
+
+bool spindleDir = 0; 
+int8_t xDir = 1; 
 int xMultiplier = 5 ;
 
 int pickupWidth = 150;
+int prevPotVal = 0;
+int xPos = 0;
 
 // the follow variables are long's because the time, measured in miliseconds,
 // will quickly become a bigger number than can be stored in an int.
@@ -64,6 +69,9 @@ void setup() {
   pinMode(spindleCtlPin, OUTPUT);
   pinMode(dirPin, INPUT);
   pinMode(resetPin, INPUT);
+  pinMode(leftPin, INPUT);
+  pinMode(rightPin, INPUT);
+  pinMode(homePin, INPUT);
   pinMode(counterPin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(counterPin), rotationISR, RISING);
 
@@ -95,9 +103,11 @@ void setup() {
   lcd.print("PickupWinder Pro");
   delay(1000);
   lcd.clear();
-  lcd.print("Count: Dir:");
+  lcd.print("Count Dir XPos");
   updateLCD_counter();
   updateLCD_direction(spindleDir);
+  updateLCD_xPos();
+  
 
   //--
   xAxis.setSpeed(60);
@@ -121,43 +131,64 @@ void loop() {
 
   resetBtnValue = digitalRead(resetPin);
   if(resetBtnValue == HIGH && previousResBtnVal == LOW && millis() - time > debounce ){
+    
     counter = 0; 
-    lcd.setCursor(0, 1);
-    lcd.print("       ");
     updateLCD_counter();
+    
+    xPos = 0;
+    xDir = 1;
+    updateLCD_xPos();
+
+    
   }
   previousResBtnVal = resetBtnValue;
 
+  homeBtnValue = digitalRead(homePin);
+  if(homeBtnValue == HIGH && previousHomeBtnVal == LOW && millis() - time > debounce ){
+    pickupWidth = xPos;
+    xDir = 1; 
+    moveXAxis(-xPos);
+    updateLCD_xPos();
+
+  }
+  previousHomeBtnVal = homeBtnValue;
+
   leftBtnValue = digitalRead(leftPin);
   if(leftBtnValue == HIGH  ){
-    moveXAxis(-1);
+    moveXAxis(-5);
+    updateLCD_xPos();
+
   }
  
 
    rightBtnValue = digitalRead(rightPin);
   if(rightBtnValue == HIGH  ){
-    moveXAxis(1);
+    moveXAxis(5);
+    updateLCD_xPos();
+
   }
  
   controlMotor(analogRead(A0), spindleDir);
   
 //  Serial.println(analogRead(A0));
-
-
- 
   // update LCD with counter value from ISR
   // move X Axis
   if(interruptFlag == 1){
+    
     updateLCD_counter();
+    updateLCD_xPos();
 
-    //((counter/pickupWidth)%2 == 0) ? stepDir = 1 : stepDir = -1 ; // maybe refactor this? - YES! - DO IT!
-    moveXAxis(getXSteps(((counter/pickupWidth)%2 == 0), xMultiplier));
+    
+    //moveXAxis(getXSteps(((xPos/pickupWidth)%2 == 0), xMultiplier));
+    moveXAxis(xMultiplier * xDir);
+    xDir = toggleDirection(xPos, pickupWidth);
+
     
     interruptFlag = 0;
   }
 }
 
-void controlMotor(int potValue, byte spindleDir){
+void controlMotor(int potValue, bool spindleDir){
   int motSpeed = map(potValue, 0, 1023, 255, 137);
   
 //  Serial.print(potValue);
@@ -200,15 +231,15 @@ void turnSpindle(byte dir, char motSpeed){ //We create a function which control 
 void updateLCD_direction(byte spDir){
   switch (spDir) {
   case 0:
-    lcd.setCursor(7,1);
+    lcd.setCursor(6,1);
     lcd.print("    ");
-    lcd.setCursor(7,1);
+    lcd.setCursor(6,1);
     lcd.print("CW");
     break;
   case 1:
-    lcd.setCursor(7,1);
+    lcd.setCursor(6,1);
     lcd.print("    ");
-    lcd.setCursor(7,1);
+    lcd.setCursor(6,1);
     lcd.print("CCW");
     break;    
   }
@@ -216,11 +247,20 @@ void updateLCD_direction(byte spDir){
 
 void updateLCD_counter(){
   lcd.setCursor(0,1);
+  lcd.print("      ");
+  lcd.setCursor(0,1);
   lcd.print(counter);
 }
 
-void moveXAxis(int stepsToMove){
+void updateLCD_xPos(){
+  lcd.setCursor(10,1);
+  lcd.print("     ");
+  lcd.setCursor(10,1);
+  lcd.print(xPos);
+}
 
+void moveXAxis(int stepsToMove){
+  xPos = xPos + stepsToMove;
   xAxis.step(stepsToMove);
 }
 
@@ -229,6 +269,15 @@ int getXSteps(byte xDir, int xMultiplier){
   
   return stepsToMove;
 }
+
+byte toggleDirection(int xPos, int pickupWidth){
+  if (xPos+xMultiplier > pickupWidth || xPos-xMultiplier < 0){
+    return -xDir;
+  }else {
+    return xDir;
+  }
+}
+
 
 void rotationISR() {  //ISR fro full rotation triggered by sensor
   counter++;
