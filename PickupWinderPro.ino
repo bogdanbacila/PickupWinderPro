@@ -11,12 +11,12 @@
 // --- Declare pins ---
 byte mot1Pin = 8; //Declaring where our module is wired
 byte mot2Pin = 9;
-byte spindleCtlPin = 3;  // Don't forget this is a PWM DI/DO
+byte spindleCtlPin = 3;  //Speed potentiometer - Don't forget this is a PWM DI/DO
+byte counterPin = 2; // IR sensor pin - Should be an interrupt pin 
 byte dirPin = 4;
-byte resetPin = 7;
-byte counterPin = 2; // Should be an interrupt pin 
-byte leftPin = 6;
 byte rightPin = 5;
+byte leftPin = 6;
+byte resetPin = 7;
 byte homePin = A1;
 
 
